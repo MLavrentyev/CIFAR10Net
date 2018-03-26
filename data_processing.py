@@ -5,11 +5,10 @@ import tensorflow as tf
 def load_batch_data(path, meta=False):
     with open(path, 'rb') as file:
         dict = pickle.load(file, encoding='bytes')
-    
     if meta:
-        return dict["label_names"]
+        return dict[b"label_names"]
     else: 
-        return dict["data"], dict["labels"]
+        return dict[b"data"], dict[b"labels"]
 
 def reshape_image_data(data):
     num_entries = data.shape[0]
