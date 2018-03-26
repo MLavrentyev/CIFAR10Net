@@ -1,5 +1,6 @@
 import pickle
 import numpy as np
+import tensorflow as tf
 
 def load_batch_data(path, meta=False):
     with open(path, 'rb') as file:
@@ -15,3 +16,7 @@ def reshape_image_data(data):
     data = np.reshape(data, (num_entries, 3, 32, 32))
     data = np.swapaxes(data, 1, 3)
     return data
+
+def reshape_labels(labels):
+    depth = 10
+    return tf.one_hot(labels, depth)
