@@ -12,4 +12,6 @@ def load_batch_data(path, meta=False):
 
 def reshape_image_data(data):
     num_entries = data.shape[0]
-    return np.reshape(data, (num_entries, 3, 32, 32))
+    data = np.reshape(data, (num_entries, 3, 32, 32))
+    data = np.swapaxes(data, 1, 3)
+    return data
