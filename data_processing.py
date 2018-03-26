@@ -16,6 +16,10 @@ def reshape_image_data(data):
     data = np.swapaxes(data, 1, 3)
     return data
 
-def reshape_labels(labels):
-    depth = 10
-    return tf.one_hot(labels, depth)
+def reshape_labels(labels, num_classes):
+    array = np.zeros((labels.shape[0], num_classes), dtype=np.float32)
+
+    for row, index in zip(array, labels):
+        row[index] = 1.
+
+    return array

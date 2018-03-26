@@ -62,7 +62,7 @@ def main(unused_argv):
         d = data_processing.reshape_image_data(d)
         l = data_processing.reshape_labels(l)
         data_batches.append(d)
-        label_batches.append(l)
+        label_batches.append(l, 10)
     num_batches = len(data_batches)
 
     x = tf.placeholder(tf.float32, shape=[None, 32, 32, 3], name="x")
