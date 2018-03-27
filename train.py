@@ -1,5 +1,6 @@
 import tensorflow as tf
 import data_processing
+import os
 
 
 def conv_layer(input, channels_in, channels_out, filter_shape, name="conv"):
@@ -31,7 +32,6 @@ def fc_layer(input, channels_in, channels_out, name="fcl"):
     return activation
 
 
-
 def neural_network(in_data, labels):
     conv1 = conv_layer(in_data, 3, 32, (6,6), name="conv1")
     pool1 = tf.nn.max_pool(conv1, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
@@ -50,7 +50,22 @@ def neural_network(in_data, labels):
 
 
 def main(unused_argv):
-    sess = tf.Session()
+    # Determine file to store logs and model in
+    trained_model_root_path = "trained_models/cifar10/"
+    tensorboard_log_root_path = "tensorboard/cifar10/"
+
+    file_n = 0
+    while True:
+        if os.path.exists(trained_model_root_path + str(file_n)) or \
+            os.path.exists(tensorboard_log_root_path + str(file_n)):
+            file_n += 1
+        else:
+            break
+
+    # Initialize session
+    sess_config = tf.ConfigProto(inter_op_parallelism_threads=1,
+                                 intra_op_parallelism_threads=1)
+    sess = tf.Session(config=sess_config)
 
     # Set up training data
     base_data_path = "data/cifar-10-batches-py/"
@@ -60,9 +75,9 @@ def main(unused_argv):
     for file in data_files:
         d, l = data_processing.load_batch_data(base_data_path + file)
         d = data_processing.reshape_image_data(d)
-        l = data_processing.reshape_labels(l)
+        l = data_processing.reshape_labels(l, 10)
         data_batches.append(d)
-        label_batches.append(l, 10)
+        label_batches.append(l)
     num_batches = len(data_batches)
 
     x = tf.placeholder(tf.float32, shape=[None, 32, 32, 3], name="x")
@@ -72,10 +87,10 @@ def main(unused_argv):
 
     # Backpropogate to optimize
     with tf.name_scope("xent"):
-        cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=y))
+        cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=logits, labels=y))
         tf.summary.scalar("xent", cross_entropy)
     with tf.name_scope("train"):
-        train_step = tf.train.AdamOptimizer(1e-4).minimize(cross_entropy)
+        train_step = tf.train.AdamOptimizer(1e-1).minimize(cross_entropy)
     with tf.name_scope("accuracy"):
         correct_prediction = tf.equal(tf.argmax(logits, 1), tf.argmax(y, 1))
         accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
@@ -85,7 +100,7 @@ def main(unused_argv):
 
 
     # Tensorboard writer
-    writer = tf.summary.FileWriter("tensorboard/cifar10/0")
+    writer = tf.summary.FileWriter(tensorboard_log_root_path + str(file_n))
     writer.add_graph(sess.graph)
     merged_summary = tf.summary.merge_all()
 
@@ -107,7 +122,9 @@ def main(unused_argv):
         if i % 2 == 0:
             train_accuracy = sess.run(accuracy, feed_dict=feed_dict)
             print("Step: %d, Training accuracy: %.2f" % (i, train_accuracy))
-            saver.save(sess, "trained_models/cifar10", global_step = i)
+            saver.save(sess, trained_model_root_path + str(file_n), global_step = i)
+        else:
+            print("Step: %d" % (i))
 
         sess.run(train_step, feed_dict=feed_dict)
 
