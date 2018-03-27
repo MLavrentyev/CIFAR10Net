@@ -6,10 +6,10 @@ import os
 def conv_layer(input, channels_in, channels_out, filter_shape, name="conv"):
     with tf.name_scope(name):
         W = tf.Variable(tf.truncated_normal(shape=[filter_shape[0], filter_shape[1], channels_in, channels_out],
-                                            stddev=0.1))
-        b = tf.Variable(tf.constant(0., shape=[channels_out]))
+                                            stddev=0.1), name="W")
+        b = tf.Variable(tf.constant(0., shape=[channels_out]), name="b")
         conv = tf.nn.conv2d(input, W, strides=[1, 1, 1, 1], padding="SAME")
-        activation = tf.nn.relu(conv + b)
+        activation = tf.nn.relu(conv + b, name="act")
 
         tf.summary.histogram("weights", W)
         tf.summary.histogram("biases", b)
@@ -20,10 +20,10 @@ def conv_layer(input, channels_in, channels_out, filter_shape, name="conv"):
 
 def fc_layer(input, channels_in, channels_out, name="fcl"):
     with tf.name_scope(name):
-        W = tf.Variable(tf.truncated_normal(shape=[channels_in, channels_out], stddev=0.1))
-        b = tf.Variable(tf.constant(0., shape=[channels_out]))
+        W = tf.Variable(tf.truncated_normal(shape=[channels_in, channels_out], stddev=0.1), name="W")
+        b = tf.Variable(tf.constant(0., shape=[channels_out]), name="b")
         ff = tf.matmul(input, W) + b
-        activation = tf.nn.relu(ff)
+        activation = tf.nn.relu(ff, name="act")
 
         tf.summary.histogram("weights", W)
         tf.summary.histogram("biases", b)
@@ -80,7 +80,9 @@ def main(unused_argv):
         cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=logits, labels=y))
         tf.summary.scalar("xent", cross_entropy)
     with tf.name_scope("train"):
-        train_step = tf.train.AdamOptimizer(1e-4).minimize(cross_entropy)
+        optimizer = tf.train.AdamOptimizer(1e-4)
+        train_step = optimizer.minimize(cross_entropy)
+        tf.summary.scalar("learning_rate", optimizer._lr)
     with tf.name_scope("accuracy"):
         correct_prediction = tf.equal(tf.argmax(logits, 1), tf.argmax(y, 1))
         accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
