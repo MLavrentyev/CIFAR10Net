@@ -100,7 +100,7 @@ def main(unused_argv):
 
     # Train
     batch_size = 100
-    for i in range(100):
+    for i in range(1000):
         #TODO: fix this
         data = data_processing.get_batch(all_data, batch_size, i*batch_size)
         labels = data_processing.get_batch(all_labels, batch_size, i*batch_size)
@@ -122,7 +122,7 @@ def main(unused_argv):
 
     test_data, test_labels = data_processing.load_all_data("data/cifar-10-batches-py/test_batch")
     test_data = data_processing.reshape_image_data(test_data)
-    test_labels = data_processing.reshape_labels(test_labels)
+    test_labels = data_processing.reshape_labels(test_labels, 10)
 
     test_accuracy = sess.run(accuracy, feed_dict={x: test_data, y: test_labels})
     print("Test accuracy: ", test_accuracy)
