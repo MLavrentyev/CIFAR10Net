@@ -63,26 +63,16 @@ def main(unused_argv):
             break
 
     # Initialize session
-    sess_config = tf.ConfigProto(inter_op_parallelism_threads=1,
-                                 intra_op_parallelism_threads=1)
+    sess_config = tf.ConfigProto(inter_op_parallelism_threads=1, intra_op_parallelism_threads=1)
     sess = tf.Session(config=sess_config)
 
     # Set up training data
-    base_data_path = "data/cifar-10-batches-py/"
-    data_files = ["data_batch_1", "data_batch_2", "data_batch_3", "data_batch_4", "data_batch_5"]
-    data_batches = []
-    label_batches = []
-    for file in data_files:
-        d, l = data_processing.load_batch_data(base_data_path + file)
-        d = data_processing.reshape_image_data(d)
-        l = data_processing.reshape_labels(l, 10)
-        data_batches.append(d)
-        label_batches.append(l)
-    num_batches = len(data_batches)
-
+    all_data, all_labels = data_processing.load_all_data("data/cifar-10-batches-py/data")
+    all_data = data_processing.reshape_image_data(all_data)
+    all_labels = data_processing.reshape_labels(all_labels, 10)
+    print("Data loaded")
     x = tf.placeholder(tf.float32, shape=[None, 32, 32, 3], name="x")
     y = tf.placeholder(tf.float32, shape=[None, 10], name="labels")
-
     logits = neural_network(x, y)
 
     # Backpropogate to optimize
@@ -90,7 +80,7 @@ def main(unused_argv):
         cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=logits, labels=y))
         tf.summary.scalar("xent", cross_entropy)
     with tf.name_scope("train"):
-        train_step = tf.train.AdamOptimizer(1e-1).minimize(cross_entropy)
+        train_step = tf.train.AdamOptimizer(1e-4).minimize(cross_entropy)
     with tf.name_scope("accuracy"):
         correct_prediction = tf.equal(tf.argmax(logits, 1), tf.argmax(y, 1))
         accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
@@ -109,9 +99,11 @@ def main(unused_argv):
 
 
     # Train
-    for i in range(12):
-        data = data_batches[i % num_batches]
-        labels = label_batches[i % num_batches]
+    batch_size = 100
+    for i in range(100):
+        #TODO: fix this
+        data = data_processing.get_batch(all_data, batch_size, i*batch_size)
+        labels = data_processing.get_batch(all_labels, batch_size, i*batch_size)
         feed_dict = {x: data, y: labels}
 
         # Write to Tensorboard
@@ -119,10 +111,10 @@ def main(unused_argv):
         writer.add_summary(s, i)
 
         # Print out accuracy
-        if i % 2 == 0:
+        if i % 10 == 0:
             train_accuracy = sess.run(accuracy, feed_dict=feed_dict)
             print("Step: %d, Training accuracy: %.2f" % (i, train_accuracy))
-            saver.save(sess, trained_model_root_path + str(file_n), global_step = i)
+            saver.save(sess, trained_model_root_path + str(file_n) + "/model", global_step = i)
         else:
             print("Step: %d" % (i))
 
