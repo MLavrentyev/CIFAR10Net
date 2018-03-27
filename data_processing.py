@@ -20,6 +20,7 @@ def reshape_image_data(data):
     num_entries = data.shape[0]
     data = np.reshape(data, (num_entries, 3, 32, 32))
     data = np.swapaxes(data, 1, 3)
+
     return data
 
 
@@ -30,3 +31,9 @@ def reshape_labels(labels, num_classes):
         row[index] = 1.
 
     return array
+
+#TODO: add data normalization
+def normalize_image_data(data):
+    data /= 128
+    data -= 1
+    return data
