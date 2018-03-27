@@ -120,6 +120,13 @@ def main(unused_argv):
 
         sess.run(train_step, feed_dict=feed_dict)
 
+    test_data, test_labels = data_processing.load_all_data("data/cifar-10-batches-py/test_batch")
+    test_data = data_processing.reshape_image_data(test_data)
+    test_labels = data_processing.reshape_labels(test_labels)
+
+    test_accuracy = sess.run(accuracy, feed_dict={x: test_data, y: test_labels})
+    print("Test accuracy: ", test_accuracy)
+
     sess.close()
 
 if __name__ == "__main__":
