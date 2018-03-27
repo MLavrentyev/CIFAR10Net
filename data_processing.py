@@ -17,7 +17,7 @@ def reshape_image_data(data):
     return data
 
 def reshape_labels(labels, num_classes):
-    array = np.zeros((labels.shape[0], num_classes), dtype=np.float32)
+    array = np.zeros((len(labels), num_classes), dtype=np.float32)
 
     for row, index in zip(array, labels):
         row[index] = 1.
