@@ -23,7 +23,7 @@ def fc_layer(input, channels_in, channels_out, name="fcl"):
         W = tf.Variable(tf.truncated_normal(shape=[channels_in, channels_out], stddev=0.1), name="W")
         b = tf.Variable(tf.constant(0., shape=[channels_out]), name="b")
         ff = tf.matmul(input, W) + b
-        activation = tf.nn.relu(ff, name="act")
+        activation = tf.sigmoid(ff, name="act")
 
         tf.summary.histogram("weights", W)
         tf.summary.histogram("biases", b)
@@ -53,7 +53,6 @@ def main(unused_argv):
     # Determine file to store logs and model in
     trained_model_root_path = "trained_models/cifar10/"
     tensorboard_log_root_path = "tensorboard/cifar10/"
-
     file_n = 0
     while True:
         if os.path.exists(trained_model_root_path + str(file_n)) or \
@@ -63,12 +62,13 @@ def main(unused_argv):
             break
 
     # Initialize session
-    sess_config = tf.ConfigProto(inter_op_parallelism_threads=1, intra_op_parallelism_threads=1)
+    sess_config = tf.ConfigProto(inter_op_parallelism_threads=2, intra_op_parallelism_threads=2)
     sess = tf.Session(config=sess_config)
 
     # Set up training data
     all_data, all_labels = data_processing.load_all_data("data/cifar-10-batches-py/data")
     all_data = data_processing.reshape_image_data(all_data)
+    all_data = data_processing.normalize_image_data(all_data)
     all_labels = data_processing.reshape_labels(all_labels, 10)
     print("Data loaded")
     x = tf.placeholder(tf.float32, shape=[None, 32, 32, 3], name="x")
