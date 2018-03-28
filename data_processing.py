@@ -34,6 +34,4 @@ def reshape_labels(labels, num_classes):
 
 #TODO: add data normalization
 def normalize_image_data(data):
-    data /= 128
-    data -= 1
-    return data
+    return (data / 128) - 1
