@@ -18,19 +18,18 @@ def conv_layer(input, channels_in, channels_out, filter_shape, name="conv"):
     return activation
 
 
-def fc_layer(input, channels_in, channels_out, name="fcl"):
+def fc_layer(input, channels_in, channels_out, dropout_p=0., name="fcl"):
     with tf.name_scope(name):
         initializer = tf.contrib.layers.xavier_initializer()
         W = tf.Variable(initializer([channels_in, channels_out]), name="W")
         b = tf.Variable(tf.constant(0., shape=[channels_out]), name="b")
         ff = tf.matmul(input, W) + b
         activation = tf.sigmoid(ff, name="act")
-        dropout = tf.nn.dropout(activation, 0.5, name="dropout")
+        dropout = tf.nn.dropout(activation, dropout_p, name="dropout")
 
         tf.summary.histogram("weights", W)
         tf.summary.histogram("biases", b)
         tf.summary.histogram("act", activation)
-        tf.summary.histogram("dropout", dropout)
 
     return dropout
 
@@ -45,8 +44,8 @@ def neural_network(in_data):
     # in_fcl_size = pool2.reduce_prod()
     flattened = tf.reshape(pool2, [-1, 8*8*32], name="flattened")
 
-    fcl1 = fc_layer(flattened, 8*8*32, 1024, name="fcl1")
-    fcl2 = fc_layer(fcl1, 1024, 10, name="fcl2")
+    fcl1 = fc_layer(flattened, 8*8*32, 1024, dropout_p=0.5, name="fcl1")
+    fcl2 = fc_layer(fcl1, 1024, 10, dropout_p=0.5, name="fcl2")
 
     return fcl2
 
@@ -68,9 +67,11 @@ def main(unused_argv):
     sess = tf.Session(config=sess_config)
 
     # Set up training data
+    #TODO: try using grayscale images instead
     all_data, all_labels = data_processing.load_all_data("data/cifar-10-batches-py/data")
     all_data = data_processing.reshape_image_data(all_data)
     all_data = data_processing.normalize_image_data(all_data)
+    all_data = data_processing.image_data_to_grayscale(all_data)
     all_labels = data_processing.reshape_labels(all_labels, 10)
     print("Data loaded")
     x = tf.placeholder(tf.float32, shape=[None, 32, 32, 3], name="x")
@@ -104,7 +105,7 @@ def main(unused_argv):
 
     # Train
     batch_size = 80
-    for i in range(5000):
+    for i in range(800):
         #TODO: fix this
         data = data_processing.get_batch(all_data, batch_size, i*batch_size)
         labels = data_processing.get_batch(all_labels, batch_size, i*batch_size)
