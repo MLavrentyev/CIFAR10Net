@@ -103,8 +103,8 @@ def main(unused_argv):
 
 
     # Train
-    batch_size = 100
-    for i in range(1000):
+    batch_size = 80
+    for i in range(5000):
         #TODO: fix this
         data = data_processing.get_batch(all_data, batch_size, i*batch_size)
         labels = data_processing.get_batch(all_labels, batch_size, i*batch_size)
@@ -115,16 +115,19 @@ def main(unused_argv):
         writer.add_summary(s, i)
 
         # Print out accuracy
-        if i % 100 == 0:
+        if i % 70 == 0:
             train_accuracy = sess.run(accuracy, feed_dict=feed_dict)
             print("Step: %d, Training accuracy: %.2f" % (i, train_accuracy))
             saver.save(sess, trained_model_root_path + str(file_n) + "/model", global_step = i)
+        elif i % 10 == 0:
+            print("Step: %d" % (i))
 
         sess.run(train_step, feed_dict=feed_dict)
 
     test_data, test_labels = data_processing.load_all_data("data/cifar-10-batches-py/test_batch")
     test_data = data_processing.reshape_image_data(test_data)
     test_labels = data_processing.reshape_labels(test_labels, 10)
+    print("Test data loaded")
 
     test_accuracy = sess.run(accuracy, feed_dict={x: test_data, y: test_labels})
     print("Test accuracy: ", test_accuracy)
