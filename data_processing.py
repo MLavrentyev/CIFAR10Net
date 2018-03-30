@@ -24,6 +24,16 @@ def reshape_image_data(data):
     return data
 
 
+def image_data_to_grayscale(data):
+    fin_data = []
+    for i in range(data.shape[0]):
+        gray_img = 0.299 * data[i][0] + 0.587 * data[i][1] + 0.114 * data[i][2]
+        fin_data.append(gray_img)
+
+    return np.array(fin_data)
+
+
+
 def reshape_labels(labels, num_classes):
     array = np.zeros((len(labels), num_classes), dtype=np.float32)
 
