@@ -25,7 +25,7 @@ def fc_layer(input, channels_in, channels_out, dropout_p=0., name="fcl"):
         b = tf.Variable(tf.constant(0., shape=[channels_out]), name="b")
         ff = tf.matmul(input, W) + b
         activation = tf.sigmoid(ff, name="act")
-        dropout = tf.nn.dropout(activation, dropout_p, name="dropout")
+        dropout = tf.nn.dropout(activation, 1 - dropout_p, name="dropout")
 
         tf.summary.histogram("weights", W)
         tf.summary.histogram("biases", b)
@@ -34,23 +34,30 @@ def fc_layer(input, channels_in, channels_out, dropout_p=0., name="fcl"):
     return dropout
 
 
-def neural_network(in_data):
-    conv1 = conv_layer(in_data, 3, 32, (6, 6), name="conv1")
+def neural_network(in_data, n_channels_in):
+    conv1 = conv_layer(in_data, n_channels_in, 32, (6, 6), name="conv1")
     pool1 = tf.nn.max_pool(conv1, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
 
     conv2 = conv_layer(pool1, 32, 32, (6, 6), name="conv2")
     pool2 = tf.nn.max_pool(conv2, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
 
-    # in_fcl_size = pool2.reduce_prod()
-    flattened = tf.reshape(pool2, [-1, 8*8*32], name="flattened")
+    conv3 = conv_layer(pool2, 32, 64, (6, 6), name="conv3")
+    pool3 = tf.nn.max_pool(conv3, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
 
-    fcl1 = fc_layer(flattened, 8*8*32, 1024, dropout_p=0.5, name="fcl1")
-    fcl2 = fc_layer(fcl1, 1024, 10, dropout_p=0.5, name="fcl2")
+    # in_fcl_size = pool2.reduce_prod()
+    flattened = tf.reshape(pool3, [-1, 4*4*64], name="flattened")
+
+    fcl1 = fc_layer(flattened, 4*4*64, 1024, dropout_p=0.2, name="fcl1")
+    fcl2 = fc_layer(fcl1, 1024, 10, dropout_p=0., name="fcl2")
 
     return fcl2
 
 
 def main(unused_argv):
+    # Choose between grayscale or full-color images for training and valdiation
+    grayscale = False
+    n_chan = 1 if grayscale else 3
+
     # Determine file to store logs and model in
     trained_model_root_path = "trained_models/cifar10/"
     tensorboard_log_root_path = "tensorboard/cifar10/"
@@ -69,14 +76,13 @@ def main(unused_argv):
     # Set up training data
     #TODO: try using grayscale images instead
     all_data, all_labels = data_processing.load_all_data("data/cifar-10-batches-py/data")
-    all_data = data_processing.reshape_image_data(all_data)
+    all_data = data_processing.reshape_image_data(all_data, to_grayscale=grayscale)
     all_data = data_processing.normalize_image_data(all_data)
-    all_data = data_processing.image_data_to_grayscale(all_data)
     all_labels = data_processing.reshape_labels(all_labels, 10)
     print("Data loaded")
-    x = tf.placeholder(tf.float32, shape=[None, 32, 32, 3], name="x")
+    x = tf.placeholder(tf.float32, shape=[None, 32, 32, n_chan], name="x")
     y = tf.placeholder(tf.float32, shape=[None, 10], name="labels")
-    logits = neural_network(x)
+    logits = neural_network(x, n_chan)
 
     # Backpropogate to optimize
     with tf.name_scope("xent"):
@@ -105,7 +111,7 @@ def main(unused_argv):
 
     # Train
     batch_size = 80
-    for i in range(800):
+    for i in range(2500):
         #TODO: fix this
         data = data_processing.get_batch(all_data, batch_size, i*batch_size)
         labels = data_processing.get_batch(all_labels, batch_size, i*batch_size)
@@ -125,13 +131,14 @@ def main(unused_argv):
 
         sess.run(train_step, feed_dict=feed_dict)
 
-    test_data, test_labels = data_processing.load_all_data("data/cifar-10-batches-py/test_batch")
-    test_data = data_processing.reshape_image_data(test_data)
-    test_labels = data_processing.reshape_labels(test_labels, 10)
+    # Run validation set
+    val_data, val_labels = data_processing.load_all_data("data/cifar-10-batches-py/test_batch")
+    val_data = data_processing.reshape_image_data(val_data, to_grayscale=grayscale)
+    val_labels = data_processing.reshape_labels(val_labels, 10)
     print("Test data loaded")
 
-    test_accuracy = sess.run(accuracy, feed_dict={x: test_data, y: test_labels})
-    print("Test accuracy: ", test_accuracy)
+    test_accuracy = sess.run(accuracy, feed_dict={x: val_data, y: val_labels})
+    print("Validation accuracy: ", test_accuracy)
 
     sess.close()
 
