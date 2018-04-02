@@ -34,8 +34,11 @@ def fc_layer(input, channels_in, channels_out, dropout_p=0., name="fcl"):
     return dropout
 
 
-def neural_network(in_data, n_channels_in):
-    conv1 = conv_layer(in_data, n_channels_in, 32, (6, 6), name="conv1")
+def neural_network(n_channels_in):
+    x = tf.placeholder(tf.float32, shape=[None, 32, 32, n_channels_in], name="x")
+    y = tf.placeholder(tf.float32, shape=[None, 10], name="labels")
+
+    conv1 = conv_layer(x, n_channels_in, 32, (6, 6), name="conv1")
     pool1 = tf.nn.max_pool(conv1, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME")
 
     conv2 = conv_layer(pool1, 32, 32, (6, 6), name="conv2")
@@ -50,71 +53,75 @@ def neural_network(in_data, n_channels_in):
     fcl1 = fc_layer(flattened, 4*4*64, 1024, dropout_p=0.2, name="fcl1")
     fcl2 = fc_layer(fcl1, 1024, 10, dropout_p=0., name="fcl2")
 
-    return fcl2
-
-
-def main(unused_argv):
-    # Choose between grayscale or full-color images for training and valdiation
-    grayscale = False
-    n_chan = 1 if grayscale else 3
-
-    # Determine file to store logs and model in
-    trained_model_root_path = "trained_models/cifar10/"
-    tensorboard_log_root_path = "tensorboard/cifar10/"
-    file_n = 0
-    while True:
-        if os.path.exists(trained_model_root_path + str(file_n)) or \
-            os.path.exists(tensorboard_log_root_path + str(file_n)):
-            file_n += 1
-        else:
-            break
-
-    # Initialize session
-    sess_config = tf.ConfigProto(inter_op_parallelism_threads=2, intra_op_parallelism_threads=2)
-    sess = tf.Session(config=sess_config)
-
-    # Set up training data
-    #TODO: try using grayscale images instead
-    all_data, all_labels = data_processing.load_all_data("data/cifar-10-batches-py/data")
-    all_data = data_processing.reshape_image_data(all_data, to_grayscale=grayscale)
-    all_data = data_processing.normalize_image_data(all_data)
-    all_labels = data_processing.reshape_labels(all_labels, 10)
-    print("Data loaded")
-    x = tf.placeholder(tf.float32, shape=[None, 32, 32, n_chan], name="x")
-    y = tf.placeholder(tf.float32, shape=[None, 10], name="labels")
-    logits = neural_network(x, n_chan)
-
-    # Backpropogate to optimize
+    global_step = tf.Variable(0, name="global_step", trainable=False)
     with tf.name_scope("xent"):
-        cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=logits, labels=y))
+        cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=fcl2, labels=y))
         tf.summary.scalar("xent", cross_entropy)
     with tf.name_scope("train"):
         optimizer = tf.train.AdamOptimizer(6e-4)
-        train_step = optimizer.minimize(cross_entropy)
+        train_step = optimizer.minimize(cross_entropy, global_step=global_step)
         tf.summary.scalar("learning_rate", optimizer._lr)
     with tf.name_scope("accuracy"):
-        correct_prediction = tf.equal(tf.argmax(logits, 1), tf.argmax(y, 1))
+        correct_prediction = tf.equal(tf.argmax(fcl2, 1), tf.argmax(y, 1))
         accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
         tf.summary.scalar("accuracy", accuracy)
 
-    sess.run(tf.global_variables_initializer())
+    return x, y, train_step, accuracy, global_step
 
 
+def load_data(as_grayscale=False):
+    all_data, all_labels = data_processing.load_all_data("data/cifar-10-batches-py/data")
+    all_data = data_processing.reshape_image_data(all_data, to_grayscale=as_grayscale)
+    all_data = data_processing.normalize_image_data(all_data)
+    all_labels = data_processing.reshape_labels(all_labels, 10)
+    print("Data loaded")
+
+    return all_data, all_labels
+
+
+def set_up_model(sess, base_save_path, model_num=None, grayscale=False):
+    model_path = base_save_path + str(model_num) + "/"
+
+    if type(model_num) == int and os.path.exists(model_path):
+        graph_file = None
+        for file in os.listdir(model_path):
+            if file.endswith(".meta"):
+                graph_file = file
+
+        if graph_file:
+            saver = tf.train.import_meta_graph(model_path + graph_file)
+            saver.restore(sess, tf.train.latest_checkpoint(model_path))
+            print("Model restored.")
+        else:
+            print("No model file found.")
+            return
+    else:
+        model_num = 0
+        saver = tf.train.Saver(max_to_keep=5, name="CIFAR10")
+        while True:
+            if os.path.exists(base_save_path + str(model_num)):
+                model_num += 1
+            else:
+                break
+
+        n_channels = 1 if grayscale else 3
+        x, y, train_step, accuracy, global_step = neural_network(n_channels)
+
+    return model_num, saver, x, y, train_step, accuracy, global_step
+
+
+def train(sess, saver, model_num, train_step, accuracy, global_step, x, y,
+          all_data, all_labels, batch_size, num_steps,
+          tensorboard_log_root_path, trained_model_root_path):
     # Tensorboard writer
-    writer = tf.summary.FileWriter(tensorboard_log_root_path + str(file_n))
+    writer = tf.summary.FileWriter(tensorboard_log_root_path + str(model_num))
     writer.add_graph(sess.graph)
     merged_summary = tf.summary.merge_all()
 
-    # Saver to save model
-    saver = tf.train.Saver(max_to_keep=5, name="CIFAR10")
-
-
-    # Train
-    batch_size = 80
-    for i in range(2500):
-        #TODO: fix this
-        data = data_processing.get_batch(all_data, batch_size, i*batch_size)
-        labels = data_processing.get_batch(all_labels, batch_size, i*batch_size)
+    # Training
+    for i in range(num_steps):
+        data = data_processing.get_batch(all_data, batch_size, i * batch_size)
+        labels = data_processing.get_batch(all_labels, batch_size, i * batch_size)
         feed_dict = {x: data, y: labels}
 
         # Write to Tensorboard
@@ -122,14 +129,36 @@ def main(unused_argv):
         writer.add_summary(s, i)
 
         # Print out accuracy
-        if i % 70 == 0:
+        if i % 100 == 0:
             train_accuracy = sess.run(accuracy, feed_dict=feed_dict)
             print("Step: %d, Training accuracy: %.2f" % (i, train_accuracy))
-            saver.save(sess, trained_model_root_path + str(file_n) + "/model", global_step = i)
+            saver.save(sess, trained_model_root_path + str(model_num) + "/model", global_step=global_step)
         elif i % 10 == 0:
-            print("Step: %d" % (i))
+            print("Step: %d" % (global_step))
 
         sess.run(train_step, feed_dict=feed_dict)
+
+
+def main(unused_argv):
+    # Various settings here
+    # TODO refactor and split off into seperate functions
+    trained_model_root_path = "trained_models/cifar10/"
+    tensorboard_log_root_path = "tensorboard/cifar10/"
+    grayscale = False
+    model_num = 50
+
+    # Initialize session
+    sess_config = tf.ConfigProto(inter_op_parallelism_threads=2, intra_op_parallelism_threads=2)
+    sess = tf.Session(config=sess_config)
+    sess.run(tf.global_variables_initializer())
+
+    all_data, all_labels = load_data(as_grayscale=grayscale)
+    model_num, saver, x, y, train_step, accuracy, global_step = set_up_model(sess, trained_model_root_path,
+                                                                             model_num=model_num, grayscale=grayscale)
+    train(sess, saver, model_num, train_step, accuracy, global_step, x, y,
+          all_data, all_labels, 80, 100,
+          tensorboard_log_root_path, trained_model_root_path)
+
 
     # Run validation set
     val_data, val_labels = data_processing.load_all_data("data/cifar-10-batches-py/test_batch")
