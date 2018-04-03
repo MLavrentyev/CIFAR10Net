@@ -55,7 +55,7 @@ def neural_network(n_channels_in):
 
     global_step = tf.Variable(0, name="global_step", trainable=False)
     with tf.name_scope("xent"):
-        cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=fcl2, labels=y))
+        cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=fcl2, labels=y), name="xent")
         tf.summary.scalar("xent", cross_entropy)
     with tf.name_scope("train"):
         optimizer = tf.train.AdamOptimizer(6e-4)
@@ -63,7 +63,7 @@ def neural_network(n_channels_in):
         tf.summary.scalar("learning_rate", optimizer._lr)
     with tf.name_scope("accuracy"):
         correct_prediction = tf.equal(tf.argmax(fcl2, 1), tf.argmax(y, 1))
-        accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+        accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32), name="accuracy")
         tf.summary.scalar("accuracy", accuracy)
 
     return x, y, train_step, accuracy, global_step
@@ -91,11 +91,24 @@ def set_up_model(sess, base_save_path, model_num=None, grayscale=False):
         if graph_file:
             saver = tf.train.import_meta_graph(model_path + graph_file)
             saver.restore(sess, tf.train.latest_checkpoint(model_path))
-            print("Model restored.")
+
+            graph = tf.get_default_graph()
+            [print(op.name) for op in graph.get_operations()]
+            x = graph.get_tensor_by_name("x:0")
+            y = graph.get_tensor_by_name("labels:0")
+            train_step = graph.get_tensor_by_name("train_step:0")
+            accuracy = graph.get_tensor_by_name("accuracy:0")
+            global_step = graph.get_tensor_by_name("global_step:0")
+
+            print("Model restored: %d" % (model_num))
         else:
             print("No model file found.")
             return
     else:
+        n_channels = 1 if grayscale else 3
+        x, y, train_step, accuracy, global_step = neural_network(n_channels)
+        sess.run(tf.global_variables_initializer())
+
         model_num = 0
         saver = tf.train.Saver(max_to_keep=5, name="CIFAR10")
         while True:
@@ -103,9 +116,7 @@ def set_up_model(sess, base_save_path, model_num=None, grayscale=False):
                 model_num += 1
             else:
                 break
-
-        n_channels = 1 if grayscale else 3
-        x, y, train_step, accuracy, global_step = neural_network(n_channels)
+        print("New model created: %d" % (model_num))
 
     return model_num, saver, x, y, train_step, accuracy, global_step
 
@@ -120,6 +131,8 @@ def train(sess, saver, model_num, train_step, accuracy, global_step, x, y,
 
     # Training
     for i in range(num_steps):
+        step = sess.run(global_step)
+
         data = data_processing.get_batch(all_data, batch_size, i * batch_size)
         labels = data_processing.get_batch(all_labels, batch_size, i * batch_size)
         feed_dict = {x: data, y: labels}
@@ -131,10 +144,10 @@ def train(sess, saver, model_num, train_step, accuracy, global_step, x, y,
         # Print out accuracy
         if i % 100 == 0:
             train_accuracy = sess.run(accuracy, feed_dict=feed_dict)
-            print("Step: %d, Training accuracy: %.2f" % (i, train_accuracy))
-            saver.save(sess, trained_model_root_path + str(model_num) + "/model", global_step=global_step)
+            print("Step: %d, Training accuracy: %.2f" % (step, train_accuracy))
+            saver.save(sess, trained_model_root_path + str(model_num) + "/model", global_step=step)
         elif i % 10 == 0:
-            print("Step: %d" % (global_step))
+            print("Step: %d" % (step))
 
         sess.run(train_step, feed_dict=feed_dict)
 
@@ -145,7 +158,7 @@ def main(unused_argv):
     trained_model_root_path = "trained_models/cifar10/"
     tensorboard_log_root_path = "tensorboard/cifar10/"
     grayscale = False
-    model_num = 50
+    model_num = 42
 
     # Initialize session
     sess_config = tf.ConfigProto(inter_op_parallelism_threads=2, intra_op_parallelism_threads=2)
