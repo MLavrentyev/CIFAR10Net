@@ -58,8 +58,8 @@ def neural_network(n_channels_in):
         cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=fcl2, labels=y), name="xent")
         tf.summary.scalar("xent", cross_entropy)
     with tf.name_scope("train"):
-        optimizer = tf.train.AdamOptimizer(6e-4)
-        train_step = optimizer.minimize(cross_entropy, global_step=global_step)
+        optimizer = tf.train.AdamOptimizer(6e-4, name="optimizer")
+        train_step = optimizer.minimize(cross_entropy, global_step=global_step, name="train_step")
         tf.summary.scalar("learning_rate", optimizer._lr)
     with tf.name_scope("accuracy"):
         correct_prediction = tf.equal(tf.argmax(fcl2, 1), tf.argmax(y, 1))
@@ -96,9 +96,9 @@ def set_up_model(sess, base_save_path, model_num=None, grayscale=False):
             [print(op.name) for op in graph.get_operations()]
             x = graph.get_tensor_by_name("x:0")
             y = graph.get_tensor_by_name("labels:0")
-            train_step = graph.get_tensor_by_name("train_step:0")
-            accuracy = graph.get_tensor_by_name("accuracy:0")
             global_step = graph.get_tensor_by_name("global_step:0")
+            train_step = graph.get_tensor_by_name("train/train_step:0")
+            accuracy = graph.get_tensor_by_name("accuracy/accuracy:0")
 
             print("Model restored: %d" % (model_num))
         else:
@@ -158,7 +158,7 @@ def main(unused_argv):
     trained_model_root_path = "trained_models/cifar10/"
     tensorboard_log_root_path = "tensorboard/cifar10/"
     grayscale = False
-    model_num = 42
+    model_num = 52
 
     # Initialize session
     sess_config = tf.ConfigProto(inter_op_parallelism_threads=2, intra_op_parallelism_threads=2)
@@ -174,13 +174,13 @@ def main(unused_argv):
 
 
     # Run validation set
-    val_data, val_labels = data_processing.load_all_data("data/cifar-10-batches-py/test_batch")
-    val_data = data_processing.reshape_image_data(val_data, to_grayscale=grayscale)
-    val_labels = data_processing.reshape_labels(val_labels, 10)
-    print("Test data loaded")
-
-    test_accuracy = sess.run(accuracy, feed_dict={x: val_data, y: val_labels})
-    print("Validation accuracy: ", test_accuracy)
+    # val_data, val_labels = data_processing.load_all_data("data/cifar-10-batches-py/test_batch")
+    # val_data = data_processing.reshape_image_data(val_data, to_grayscale=grayscale)
+    # val_labels = data_processing.reshape_labels(val_labels, 10)
+    # print("Test data loaded")
+    #
+    # test_accuracy = sess.run(accuracy, feed_dict={x: val_data, y: val_labels})
+    # print("Validation accuracy: ", test_accuracy)
 
     sess.close()
 
